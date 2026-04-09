@@ -250,6 +250,10 @@ fn run() -> Result<(), Box<dyn std::error::Error>> {
             base_commit,
             reasoning_effort,
         )?,
+        CliAction::Finetune {
+            subcommand,
+            output_format,
+        } => handle_finetune(&subcommand, output_format)?,
         CliAction::HelpTopic(topic) => print_help_topic(topic),
         CliAction::Help { output_format } => print_help(output_format)?,
     }
@@ -338,6 +342,10 @@ enum CliAction {
         permission_mode: PermissionMode,
         base_commit: Option<String>,
         reasoning_effort: Option<String>,
+    },
+    Finetune {
+        subcommand: String,
+        output_format: CliOutputFormat,
     },
     HelpTopic(LocalHelpTopic),
     // prompt-mode formatting is only supported for non-interactive runs
@@ -584,6 +592,18 @@ fn parse_args(args: &[String]) -> Result<CliAction, String> {
         "logout" => Ok(CliAction::Logout { output_format }),
         "init" => Ok(CliAction::Init { output_format }),
         "export" => parse_export_args(&rest[1..], output_format),
+        "finetune" => {
+            let sub = rest[1..].join(" ");
+            let sub = if sub.trim().is_empty() {
+                "status".to_string()
+            } else {
+                sub
+            };
+            Ok(CliAction::Finetune {
+                subcommand: sub,
+                output_format,
+            })
+        }
         "prompt" => {
             let prompt = rest[1..].join(" ");
             if prompt.trim().is_empty() {
@@ -1347,6 +1367,156 @@ fn render_doctor_report() -> Result<DoctorReport, Box<dyn std::error::Error>> {
             check_system_health(&cwd, config.as_ref().ok()),
         ],
     })
+}
+
+fn handle_finetune(
+    subcommand: &str,
+    output_format: CliOutputFormat,
+) -> Result<(), Box<dyn std::error::Error>> {
+    let config = feedback::FeedbackConfig::default();
+    let orchestrator = feedback::trigger::PipelineOrchestrator::new(config.clone());
+
+    match subcommand {
+        "status" => {
+            let state = feedback::trigger::TriggerState::load();
+            let status = orchestrator.status()?;
+            match output_format {
+                CliOutputFormat::Text => {
+                    println!("Fine-tune pipeline status");
+                    println!("  Auto-trigger:     {}", if status.auto_enabled { "enabled" } else { "disabled" });
+                    println!("  Sessions pending: {}", status.sessions_since_last);
+                    match status.last_finetune_timestamp {
+                        Some(ts) => println!("  Last run:         timestamp {ts}"),
+                        None => println!("  Last run:         never"),
+                    }
+                    println!("  Total logs:       {}", status.total_session_logs);
+                    println!("  Exportable:       {}", status.exportable_sessions);
+                    if status.installed_model_versions.is_empty() {
+                        println!("  Models:           (none)");
+                    } else {
+                        println!("  Models:           {}", status.installed_model_versions.join(", "));
+                    }
+                    println!("  Should trigger:   {}", state.should_trigger(&config));
+                }
+                CliOutputFormat::Json => {
+                    let value = serde_json::json!({
+                        "auto_enabled": status.auto_enabled,
+                        "sessions_since_last": status.sessions_since_last,
+                        "last_finetune_timestamp": status.last_finetune_timestamp,
+                        "total_session_logs": status.total_session_logs,
+                        "exportable_sessions": status.exportable_sessions,
+                        "installed_model_versions": status.installed_model_versions,
+                        "should_trigger": state.should_trigger(&config),
+                    });
+                    println!("{}", serde_json::to_string_pretty(&value)?);
+                }
+            }
+        }
+        "data stats" => {
+            let exporter = feedback::exporter::DataExporter::new();
+            let logger = feedback::logger::SessionLogger::new(feedback::logs_dir());
+            let paths = logger.list_sessions()?;
+            let mut logs = Vec::new();
+            for path in &paths {
+                match feedback::logger::SessionLog::load_from_path(path) {
+                    Ok(log) => logs.push(log),
+                    Err(e) => eprintln!("Warning: skipping {}: {e}", path.display()),
+                }
+            }
+            let stats = exporter.compute_stats(&logs);
+            match output_format {
+                CliOutputFormat::Text => {
+                    println!("Training data statistics");
+                    println!("  Sessions exported:      {}", stats.sessions_exported);
+                    println!("  Sessions skipped:       {}", stats.sessions_skipped);
+                    println!("  Conversations written:  {}", stats.conversations_written);
+                }
+                CliOutputFormat::Json => {
+                    let value = serde_json::json!({
+                        "sessions_exported": stats.sessions_exported,
+                        "sessions_skipped": stats.sessions_skipped,
+                        "conversations_written": stats.conversations_written,
+                    });
+                    println!("{}", serde_json::to_string_pretty(&value)?);
+                }
+            }
+        }
+        "data export" => {
+            let stats = orchestrator.export_data()?;
+            match output_format {
+                CliOutputFormat::Text => {
+                    println!("Export complete");
+                    println!("  Sessions exported:      {}", stats.sessions_exported);
+                    println!("  Sessions skipped:       {}", stats.sessions_skipped);
+                    println!("  Conversations written:  {}", stats.conversations_written);
+                }
+                CliOutputFormat::Json => {
+                    let value = serde_json::json!({
+                        "sessions_exported": stats.sessions_exported,
+                        "sessions_skipped": stats.sessions_skipped,
+                        "conversations_written": stats.conversations_written,
+                    });
+                    println!("{}", serde_json::to_string_pretty(&value)?);
+                }
+            }
+        }
+        "run" => {
+            let rt = tokio::runtime::Runtime::new()?;
+            let model_name = rt.block_on(orchestrator.run_finetune())?;
+            match output_format {
+                CliOutputFormat::Text => println!("Fine-tuning complete. Active model: {model_name}"),
+                CliOutputFormat::Json => {
+                    let value = serde_json::json!({"status": "complete", "model": model_name});
+                    println!("{}", serde_json::to_string_pretty(&value)?);
+                }
+            }
+        }
+        "rollback" => {
+            let rt = tokio::runtime::Runtime::new()?;
+            let model_name = rt.block_on(orchestrator.rollback())?;
+            match output_format {
+                CliOutputFormat::Text => println!("Rolled back. Active model: {model_name}"),
+                CliOutputFormat::Json => {
+                    let value = serde_json::json!({"status": "rolled_back", "model": model_name});
+                    println!("{}", serde_json::to_string_pretty(&value)?);
+                }
+            }
+        }
+        sub if sub.starts_with("auto") => {
+            let trimmed = sub.strip_prefix("auto").unwrap_or("").trim();
+            match trimmed {
+                "--enable" => {
+                    orchestrator.set_auto(true)?;
+                    match output_format {
+                        CliOutputFormat::Text => println!("Auto fine-tuning enabled"),
+                        CliOutputFormat::Json => {
+                            println!("{}", serde_json::json!({"auto_enabled": true}));
+                        }
+                    }
+                }
+                "--disable" => {
+                    orchestrator.set_auto(false)?;
+                    match output_format {
+                        CliOutputFormat::Text => println!("Auto fine-tuning disabled"),
+                        CliOutputFormat::Json => {
+                            println!("{}", serde_json::json!({"auto_enabled": false}));
+                        }
+                    }
+                }
+                _ => {
+                    return Err(format!(
+                        "Unknown finetune auto option: '{sub}'. Expected 'auto --enable' or 'auto --disable'"
+                    ).into());
+                }
+            }
+        }
+        other => {
+            return Err(format!(
+                "Unknown finetune subcommand: '{other}'. Expected: status, data stats, data export, run, rollback, auto --enable, auto --disable"
+            ).into());
+        }
+    }
+    Ok(())
 }
 
 fn run_doctor(output_format: CliOutputFormat) -> Result<(), Box<dyn std::error::Error>> {

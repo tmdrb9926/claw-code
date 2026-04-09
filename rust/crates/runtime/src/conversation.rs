@@ -1,6 +1,7 @@
 use std::collections::BTreeMap;
 use std::fmt::{Display, Formatter};
 
+use feedback::logger::SessionLogger;
 use serde_json::{Map, Value};
 use telemetry::SessionTracer;
 
@@ -136,6 +137,7 @@ pub struct ConversationRuntime<C, T> {
     hook_abort_signal: HookAbortSignal,
     hook_progress_reporter: Option<Box<dyn HookProgressReporter>>,
     session_tracer: Option<SessionTracer>,
+    session_logger: Option<SessionLogger>,
 }
 
 impl<C, T> ConversationRuntime<C, T>
@@ -185,6 +187,7 @@ where
             hook_abort_signal: HookAbortSignal::default(),
             hook_progress_reporter: None,
             session_tracer: None,
+            session_logger: None,
         }
     }
 
@@ -218,6 +221,12 @@ where
     #[must_use]
     pub fn with_session_tracer(mut self, session_tracer: SessionTracer) -> Self {
         self.session_tracer = Some(session_tracer);
+        self
+    }
+
+    #[must_use]
+    pub fn with_session_logger(mut self, logger: SessionLogger) -> Self {
+        self.session_logger = Some(logger);
         self
     }
 
