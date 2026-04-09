@@ -33,6 +33,7 @@ pub enum ProviderKind {
     Anthropic,
     Xai,
     OpenAi,
+    Ollama,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -122,6 +123,42 @@ const MODEL_REGISTRY: &[(&str, ProviderMetadata)] = &[
             default_base_url: openai_compat::DEFAULT_XAI_BASE_URL,
         },
     ),
+    (
+        "gemma4",
+        ProviderMetadata {
+            provider: ProviderKind::Ollama,
+            auth_env: "OLLAMA_API_KEY",
+            base_url_env: "OLLAMA_BASE_URL",
+            default_base_url: "http://localhost:11434",
+        },
+    ),
+    (
+        "gemma4-31b",
+        ProviderMetadata {
+            provider: ProviderKind::Ollama,
+            auth_env: "OLLAMA_API_KEY",
+            base_url_env: "OLLAMA_BASE_URL",
+            default_base_url: "http://localhost:11434",
+        },
+    ),
+    (
+        "gemma4-26b",
+        ProviderMetadata {
+            provider: ProviderKind::Ollama,
+            auth_env: "OLLAMA_API_KEY",
+            base_url_env: "OLLAMA_BASE_URL",
+            default_base_url: "http://localhost:11434",
+        },
+    ),
+    (
+        "local",
+        ProviderMetadata {
+            provider: ProviderKind::Ollama,
+            auth_env: "OLLAMA_API_KEY",
+            base_url_env: "OLLAMA_BASE_URL",
+            default_base_url: "http://localhost:11434",
+        },
+    ),
 ];
 
 #[must_use]
@@ -145,6 +182,12 @@ pub fn resolve_model_alias(model: &str) -> String {
                     _ => trimmed,
                 },
                 ProviderKind::OpenAi => trimmed,
+                ProviderKind::Ollama => match *alias {
+                    "gemma4" | "gemma4-31b" => "gemma4:31b",
+                    "gemma4-26b" => "gemma4:26b-a4b",
+                    "local" => trimmed,
+                    _ => trimmed,
+                },
             })
         })
         .map_or_else(|| trimmed.to_string(), ToOwned::to_owned)
@@ -194,6 +237,14 @@ pub fn metadata_for_model(model: &str) -> Option<ProviderMetadata> {
             default_base_url: openai_compat::DEFAULT_DASHSCOPE_BASE_URL,
         });
     }
+    if canonical.starts_with("gemma4") || canonical == "local" {
+        return Some(ProviderMetadata {
+            provider: ProviderKind::Ollama,
+            auth_env: "OLLAMA_API_KEY",
+            base_url_env: "OLLAMA_BASE_URL",
+            default_base_url: "http://localhost:11434",
+        });
+    }
     None
 }
 
@@ -210,6 +261,9 @@ pub fn detect_provider_kind(model: &str) -> ProviderKind {
     }
     if openai_compat::has_api_key("XAI_API_KEY") {
         return ProviderKind::Xai;
+    }
+    if std::env::var("OLLAMA_HOST").is_ok() || std::env::var("OLLAMA_BASE_URL").is_ok() {
+        return ProviderKind::Ollama;
     }
     ProviderKind::Anthropic
 }
@@ -252,6 +306,10 @@ pub fn model_token_limit(model: &str) -> Option<ModelTokenLimit> {
         "grok-3" | "grok-3-mini" => Some(ModelTokenLimit {
             max_output_tokens: 64_000,
             context_window_tokens: 131_072,
+        }),
+        _ if canonical.starts_with("gemma4") => Some(ModelTokenLimit {
+            max_output_tokens: 8_192,
+            context_window_tokens: 32_768,
         }),
         _ => None,
     }
@@ -428,8 +486,8 @@ mod tests {
     use super::{
         anthropic_missing_credentials, anthropic_missing_credentials_hint, detect_provider_kind,
         load_dotenv_file, max_tokens_for_model, max_tokens_for_model_with_override,
-        model_token_limit, parse_dotenv, preflight_message_request, resolve_model_alias,
-        ProviderKind,
+        metadata_for_model, model_token_limit, parse_dotenv, preflight_message_request,
+        resolve_model_alias, ProviderKind,
     };
 
     /// Serializes every test in this module that mutates process-wide
@@ -980,5 +1038,34 @@ NO_EQUALS_LINE
             hint.is_none(),
             "empty env var should not trigger the hint sniffer, got {hint:?}"
         );
+    }
+
+    #[test]
+    fn resolve_gemma4_alias() {
+        assert_eq!(resolve_model_alias("gemma4"), "gemma4:31b");
+    }
+
+    #[test]
+    fn resolve_gemma4_31b_alias() {
+        assert_eq!(resolve_model_alias("gemma4-31b"), "gemma4:31b");
+    }
+
+    #[test]
+    fn resolve_gemma4_26b_alias() {
+        assert_eq!(resolve_model_alias("gemma4-26b"), "gemma4:26b-a4b");
+    }
+
+    #[test]
+    fn metadata_for_gemma4_model() {
+        let meta = metadata_for_model("gemma4").unwrap();
+        assert_eq!(meta.provider, ProviderKind::Ollama);
+        assert_eq!(meta.auth_env, "OLLAMA_API_KEY");
+        assert_eq!(meta.default_base_url, "http://localhost:11434");
+    }
+
+    #[test]
+    fn detect_ollama_provider_for_gemma4() {
+        let kind = detect_provider_kind("gemma4:31b");
+        assert_eq!(kind, ProviderKind::Ollama);
     }
 }

@@ -43,6 +43,19 @@ impl ProviderClient {
                 };
                 Ok(Self::OpenAi(OpenAiCompatClient::from_env(config)?))
             }
+            ProviderKind::Ollama => {
+                // Ollama speaks the OpenAI-compatible wire format, so we
+                // route through the OpenAiCompatClient with Ollama-specific
+                // config. Auth is optional for local Ollama — fall back to
+                // an empty key when OLLAMA_API_KEY is not set so users can
+                // run without configuring credentials.
+                let config = OpenAiCompatConfig::ollama();
+                let client = match OpenAiCompatClient::from_env(config) {
+                    Ok(c) => c,
+                    Err(_) => OpenAiCompatClient::new("", config),
+                };
+                Ok(Self::OpenAi(client))
+            }
         }
     }
 
