@@ -1,0 +1,1 @@
+// Auto-trigger module - placeholder
