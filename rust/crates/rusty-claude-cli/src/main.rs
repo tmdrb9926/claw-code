@@ -63,6 +63,8 @@ const DEFAULT_MODEL: &str = "claude-opus-4-6";
 fn max_tokens_for_model(model: &str) -> u32 {
     if model.contains("opus") {
         32_000
+    } else if model.contains("gemma4") {
+        8_192
     } else {
         64_000
     }
@@ -911,6 +913,8 @@ fn resolve_model_alias(model: &str) -> &str {
         "opus" => "claude-opus-4-6",
         "sonnet" => "claude-sonnet-4-6",
         "haiku" => "claude-haiku-4-5-20251213",
+        "gemma4" | "gemma4-31b" => "gemma4:31b",
+        "gemma4-26b" => "gemma4:26b-a4b",
         _ => model,
     }
 }
