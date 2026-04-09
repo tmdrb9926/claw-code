@@ -555,6 +555,12 @@ pub struct MessageStream {
 }
 
 impl MessageStream {
+    #[must_use]
+    pub fn request_id(&self) -> Option<&str> {
+        // Ollama's API does not return request IDs.
+        None
+    }
+
     pub async fn next_event(&mut self) -> Result<Option<StreamEvent>, ApiError> {
         loop {
             if let Some(event) = self.pending.pop_front() {
