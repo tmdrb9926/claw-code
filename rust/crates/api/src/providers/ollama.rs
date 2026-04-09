@@ -599,7 +599,11 @@ impl MessageStream {
                                 ApiError::json_deserialize("Ollama", &self.model, trimmed, error)
                             })?;
 
+                        let is_done = parsed.done;
                         self.pending.extend(self.state.ingest_chunk(parsed)?);
+                        if is_done {
+                            self.done = true;
+                        }
                     }
                 }
                 None => {

@@ -606,10 +606,19 @@ impl MarkdownStreamState {
     #[must_use]
     pub fn push(&mut self, renderer: &TerminalRenderer, delta: &str) -> Option<String> {
         self.pending.push_str(delta);
-        let split = find_stream_safe_boundary(&self.pending)?;
-        let ready = self.pending[..split].to_string();
-        self.pending.drain(..split);
-        Some(renderer.markdown_to_ansi(&ready))
+        if let Some(split) = find_stream_safe_boundary(&self.pending) {
+            let ready = self.pending[..split].to_string();
+            self.pending.drain(..split);
+            Some(renderer.markdown_to_ansi(&ready))
+        } else if self.pending.len() > 20 && !self.pending.contains("```") {
+            // Force flush for short responses without markdown boundaries
+            // (e.g. local models that stream token-by-token without newlines).
+            // Skip if we might be inside a code fence.
+            let pending = std::mem::take(&mut self.pending);
+            Some(renderer.markdown_to_ansi(&pending))
+        } else {
+            None
+        }
     }
 
     #[must_use]
