@@ -17,7 +17,7 @@ use super::{preflight_message_request, Provider, ProviderFuture};
 
 const DEFAULT_BASE_URL: &str = "http://localhost:11434";
 const DEFAULT_NUM_CTX: u32 = 32_768;
-const DEFAULT_KEEP_ALIVE: &str = "-1";
+const DEFAULT_KEEP_ALIVE: &str = "-1m";
 const DEFAULT_INITIAL_BACKOFF: Duration = Duration::from_secs(1);
 const DEFAULT_MAX_BACKOFF: Duration = Duration::from_secs(128);
 const DEFAULT_MAX_RETRIES: u32 = 8;
