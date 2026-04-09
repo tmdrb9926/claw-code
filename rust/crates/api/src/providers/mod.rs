@@ -8,6 +8,7 @@ use crate::error::ApiError;
 use crate::types::{MessageRequest, MessageResponse};
 
 pub mod anthropic;
+pub mod ollama;
 pub mod openai_compat;
 
 #[allow(dead_code)]
