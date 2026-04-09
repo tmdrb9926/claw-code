@@ -110,11 +110,7 @@ impl SessionLogger {
     }
 
     /// Write a session-end footer with the overall feedback verdict.
-    pub fn finalize_session(
-        &self,
-        session_id: &str,
-        feedback: &str,
-    ) -> Result<(), std::io::Error> {
+    pub fn finalize_session(&self, session_id: &str, feedback: &str) -> Result<(), std::io::Error> {
         let path = self.session_path(session_id);
         let mut file = OpenOptions::new().create(true).append(true).open(&path)?;
         let record = SessionEndRecord {
@@ -150,7 +146,9 @@ impl SessionLogger {
     }
 }
 
+#[allow(clippy::cast_possible_truncation)]
 fn current_time_ms() -> u64 {
+    // Truncation from u128 to u64 is safe: u64 millis covers ~584M years.
     SystemTime::now()
         .duration_since(UNIX_EPOCH)
         .unwrap_or_default()

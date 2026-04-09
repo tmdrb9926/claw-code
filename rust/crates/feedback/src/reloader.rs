@@ -22,10 +22,7 @@ pub enum ReloadError {
     Io(std::io::Error),
     InvalidGguf(String),
     OllamaCreateFailed(String),
-    SanityTestFailed {
-        prompt_index: usize,
-        reason: String,
-    },
+    SanityTestFailed { prompt_index: usize, reason: String },
     RollbackFailed(String),
 }
 
@@ -223,7 +220,7 @@ impl ModelReloader {
         let (installed_path, model_name) = self.install_gguf(gguf_source)?;
         self.ollama_create(&model_name, &installed_path).await?;
         self.sanity_test(&model_name).await?;
-        self.prune_old_models()?;
+        self.prune_old_models();
         Ok(model_name)
     }
 
@@ -263,17 +260,16 @@ impl ModelReloader {
     }
 
     /// Remove old model versions, keeping only `model_retention` most recent.
-    fn prune_old_models(&self) -> Result<(), ReloadError> {
+    fn prune_old_models(&self) {
         let versions = self.list_versions();
-        if versions.len() as u32 <= self.model_retention {
-            return Ok(());
+        if versions.len() <= self.model_retention as usize {
+            return;
         }
         for (_, path) in versions.iter().skip(self.model_retention as usize) {
             if let Err(e) = fs::remove_file(path) {
                 eprintln!("Warning: failed to prune {}: {e}", path.display());
             }
         }
-        Ok(())
     }
 }
 

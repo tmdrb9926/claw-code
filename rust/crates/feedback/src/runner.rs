@@ -78,6 +78,7 @@ impl FineTuneRunner {
 
     /// Generate the Unsloth fine-tuning Python script and write it to the
     /// scripts directory. Returns the path to the generated script.
+    #[allow(clippy::too_many_lines)]
     pub fn generate_script(
         &self,
         data_path: &Path,
@@ -248,8 +249,7 @@ with open(os.path.join(OUTPUT_DIR, "DONE"), "w") as f:
         });
         fs::write(
             run_dir.join("config.json"),
-            serde_json::to_string_pretty(&config_json)
-                .map_err(|e| std::io::Error::new(std::io::ErrorKind::Other, e))?,
+            serde_json::to_string_pretty(&config_json).map_err(std::io::Error::other)?,
         )?;
 
         let output_model_dir = run_dir.join("output");

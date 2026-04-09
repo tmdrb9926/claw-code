@@ -9,28 +9,18 @@ use crate::runner::FineTuneRunner;
 use crate::{finetune_dir, FeedbackConfig};
 
 /// State persisted between runs to track trigger conditions.
-#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+#[derive(Debug, Clone, Default, serde::Serialize, serde::Deserialize)]
 pub struct TriggerState {
     pub last_finetune_timestamp: Option<u64>,
     pub sessions_since_last_finetune: u32,
     pub auto_enabled: bool,
 }
 
-impl Default for TriggerState {
-    fn default() -> Self {
-        Self {
-            last_finetune_timestamp: None,
-            sessions_since_last_finetune: 0,
-            auto_enabled: false,
-        }
-    }
-}
-
 impl TriggerState {
     /// Load state from disk or return default.
     #[must_use]
     pub fn load() -> Self {
-        let path = state_path();
+        let path = trigger_state_path();
         fs::read_to_string(&path)
             .ok()
             .and_then(|s| serde_json::from_str(&s).ok())
@@ -39,12 +29,11 @@ impl TriggerState {
 
     /// Persist state to disk.
     pub fn save(&self) -> Result<(), std::io::Error> {
-        let path = state_path();
+        let path = trigger_state_path();
         if let Some(parent) = path.parent() {
             fs::create_dir_all(parent)?;
         }
-        let json = serde_json::to_string_pretty(self)
-            .map_err(|e| std::io::Error::new(std::io::ErrorKind::Other, e))?;
+        let json = serde_json::to_string_pretty(self).map_err(std::io::Error::other)?;
         fs::write(path, json)
     }
 
@@ -87,7 +76,7 @@ impl TriggerState {
     }
 }
 
-fn state_path() -> PathBuf {
+fn trigger_state_path() -> PathBuf {
     finetune_dir().join("trigger_state.json")
 }
 
@@ -125,13 +114,14 @@ impl PipelineOrchestrator {
     }
 
     /// Gather status information for the CLI.
+    #[allow(clippy::cast_possible_truncation)]
     pub fn status(&self) -> Result<PipelineStatus, std::io::Error> {
-        let state = TriggerState::load();
+        let trigger_state = TriggerState::load();
         let session_paths = self.logger.list_sessions()?;
         let total_session_logs = session_paths.len() as u32;
 
         let logs = self.load_all_session_logs()?;
-        let stats = self.exporter.compute_stats(&logs);
+        let export_stats = self.exporter.compute_stats(&logs);
         let versions = self.reloader.list_versions();
         let version_names: Vec<String> = versions
             .iter()
@@ -139,11 +129,11 @@ impl PipelineOrchestrator {
             .collect();
 
         Ok(PipelineStatus {
-            auto_enabled: state.auto_enabled,
-            sessions_since_last: state.sessions_since_last_finetune,
-            last_finetune_timestamp: state.last_finetune_timestamp,
+            auto_enabled: trigger_state.auto_enabled,
+            sessions_since_last: trigger_state.sessions_since_last_finetune,
+            last_finetune_timestamp: trigger_state.last_finetune_timestamp,
             total_session_logs,
-            exportable_sessions: stats.sessions_exported,
+            exportable_sessions: export_stats.sessions_exported,
             installed_model_versions: version_names,
         })
     }
@@ -158,8 +148,8 @@ impl PipelineOrchestrator {
     /// Run the full fine-tuning pipeline: export -> train -> reload.
     pub async fn run_finetune(&self) -> Result<String, Box<dyn std::error::Error>> {
         // Step 1: Export data.
-        let stats = self.export_data()?;
-        if stats.conversations_written == 0 {
+        let export_result = self.export_data()?;
+        if export_result.conversations_written == 0 {
             return Err("No training data available".into());
         }
         let data_path = finetune_dir().join("data/train.jsonl");
@@ -181,8 +171,8 @@ impl PipelineOrchestrator {
             .map_err(|e| Box::new(e) as Box<dyn std::error::Error>)?;
 
         // Step 4: Update trigger state.
-        let mut state = TriggerState::load();
-        state.record_finetune_complete()?;
+        let mut trigger_state = TriggerState::load();
+        trigger_state.record_finetune_complete()?;
 
         Ok(model_name)
     }
@@ -199,9 +189,9 @@ impl PipelineOrchestrator {
 
     /// Enable or disable automatic fine-tuning.
     pub fn set_auto(&self, enabled: bool) -> Result<(), std::io::Error> {
-        let mut state = TriggerState::load();
-        state.auto_enabled = enabled;
-        state.save()
+        let mut trigger_state = TriggerState::load();
+        trigger_state.auto_enabled = enabled;
+        trigger_state.save()
     }
 
     /// Load all session logs from the log directory.

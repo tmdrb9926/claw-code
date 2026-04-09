@@ -42,17 +42,46 @@ impl QualityAnalyzer {
         Self {
             positive_patterns: vec![
                 // Korean
-                "좋아", "완벽", "잘 동작", "고마워", "감사", "맞아", "좋네", "훌륭",
+                "좋아",
+                "완벽",
+                "잘 동작",
+                "고마워",
+                "감사",
+                "맞아",
+                "좋네",
+                "훌륭",
                 // English
-                "perfect", "great", "thanks", "works", "good", "excellent", "nice",
-                "awesome", "correct", "exactly",
+                "perfect",
+                "great",
+                "thanks",
+                "works",
+                "good",
+                "excellent",
+                "nice",
+                "awesome",
+                "correct",
+                "exactly",
             ],
             negative_patterns: vec![
                 // Korean
-                "아니", "다시", "틀렸", "잘못", "아닌데", "안 돼", "에러", "고쳐",
+                "아니",
+                "다시",
+                "틀렸",
+                "잘못",
+                "아닌데",
+                "안 돼",
+                "에러",
+                "고쳐",
                 // English
-                "wrong", "no,", "try again", "incorrect", "fix", "broken", "doesn't work",
-                "not right", "redo",
+                "wrong",
+                "no,",
+                "try again",
+                "incorrect",
+                "fix",
+                "broken",
+                "doesn't work",
+                "not right",
+                "redo",
             ],
         }
     }
@@ -95,7 +124,7 @@ impl QualityAnalyzer {
     /// 2. The weighted sum of all signals is strictly positive.
     #[must_use]
     pub fn is_session_positive(&self, signals: &[FeedbackSignal]) -> bool {
-        let has_negative = signals.iter().any(|s| *s == FeedbackSignal::Negative);
+        let has_negative = signals.contains(&FeedbackSignal::Negative);
         if has_negative {
             return false;
         }

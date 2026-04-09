@@ -132,7 +132,11 @@ impl DataExporter {
                 sessions_skipped += 1;
             } else {
                 sessions_exported += 1;
-                conversations_written += conversations.len() as u32;
+                #[allow(clippy::cast_possible_truncation)]
+                {
+                    // A single session produces at most 1 conversation; overflow is not a concern.
+                    conversations_written += conversations.len() as u32;
+                }
             }
         }
 

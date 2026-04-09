@@ -78,14 +78,11 @@ fn dirs_or_fallback() -> PathBuf {
     #[cfg(target_os = "windows")]
     {
         std::env::var("USERPROFILE")
-            .map(PathBuf::from)
-            .unwrap_or_else(|_| PathBuf::from("C:/Users/default"))
+            .map_or_else(|_| PathBuf::from("C:/Users/default"), PathBuf::from)
     }
     #[cfg(not(target_os = "windows"))]
     {
-        std::env::var("HOME")
-            .map(PathBuf::from)
-            .unwrap_or_else(|_| PathBuf::from("/tmp"))
+        std::env::var("HOME").map_or_else(|_| PathBuf::from("/tmp"), PathBuf::from)
     }
 }
 
