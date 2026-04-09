@@ -36,7 +36,7 @@ pub struct OpenAiCompatConfig {
 const XAI_ENV_VARS: &[&str] = &["XAI_API_KEY"];
 const OPENAI_ENV_VARS: &[&str] = &["OPENAI_API_KEY"];
 const DASHSCOPE_ENV_VARS: &[&str] = &["DASHSCOPE_API_KEY"];
-const OLLAMA_ENV_VARS: &[&str] = &["OLLAMA_API_KEY"];
+
 
 impl OpenAiCompatConfig {
     #[must_use]
@@ -73,27 +73,13 @@ impl OpenAiCompatConfig {
         }
     }
 
-    /// Ollama local inference server. Speaks the OpenAI-compatible chat
-    /// completions wire format at `/v1/chat/completions`. Auth is optional
-    /// (most local deployments run without a key), so callers that skip
-    /// `from_env` can use `OpenAiCompatClient::new("", config)` instead.
-    #[must_use]
-    pub const fn ollama() -> Self {
-        Self {
-            provider_name: "Ollama",
-            api_key_env: "OLLAMA_API_KEY",
-            base_url_env: "OLLAMA_BASE_URL",
-            default_base_url: "http://localhost:11434",
-        }
-    }
-
     #[must_use]
     pub fn credential_env_vars(self) -> &'static [&'static str] {
         match self.provider_name {
             "xAI" => XAI_ENV_VARS,
             "OpenAI" => OPENAI_ENV_VARS,
             "DashScope" => DASHSCOPE_ENV_VARS,
-            "Ollama" => OLLAMA_ENV_VARS,
+
             _ => &[],
         }
     }

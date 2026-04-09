@@ -46,8 +46,7 @@ impl ProviderClient {
                 Ok(Self::OpenAi(OpenAiCompatClient::from_env(config)?))
             }
             ProviderKind::Ollama => {
-                let resolved = providers::resolve_model_alias(model);
-                Ok(Self::Ollama(OllamaClient::new(resolved)))
+                Ok(Self::Ollama(OllamaClient::new(resolved_model)))
             }
         }
     }

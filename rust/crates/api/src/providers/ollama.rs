@@ -339,6 +339,9 @@ fn build_chat_request_value(
     if let Some(temperature) = request.temperature {
         options["temperature"] = json!(temperature);
     }
+    if let Some(top_p) = request.top_p {
+        options["top_p"] = json!(top_p);
+    }
 
     let mut payload = json!({
         "model": request.model,
