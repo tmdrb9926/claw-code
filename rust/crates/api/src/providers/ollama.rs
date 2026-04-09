@@ -496,6 +496,7 @@ struct OllamaChatResponse {
     model: String,
     message: OllamaMessage,
     #[serde(default)]
+    #[allow(dead_code)]
     done: bool,
     #[serde(default)]
     done_reason: Option<String>,
