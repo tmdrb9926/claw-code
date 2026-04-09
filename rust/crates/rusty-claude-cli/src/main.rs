@@ -6761,6 +6761,7 @@ impl AnthropicRuntimeClient {
         let mut block_has_thinking_summary = false;
         let mut saw_stop = false;
         let mut received_any_event = false;
+        let mut text_output_started = false;
 
         loop {
             let next = if apply_stall_timeout && !received_any_event {
@@ -6815,6 +6816,10 @@ impl AnthropicRuntimeClient {
                                 progress_reporter.mark_text_phase(&text);
                             }
                             if let Some(rendered) = markdown_stream.push(&renderer, &text) {
+                                if !text_output_started {
+                                    text_output_started = true;
+                                    let _ = write!(out, "\n");
+                                }
                                 write!(out, "{rendered}")
                                     .and_then(|()| out.flush())
                                     .map_err(|error| RuntimeError::new(error.to_string()))?;
@@ -6838,6 +6843,10 @@ impl AnthropicRuntimeClient {
                 ApiStreamEvent::ContentBlockStop(_) => {
                     block_has_thinking_summary = false;
                     if let Some(rendered) = markdown_stream.flush(&renderer) {
+                        if !text_output_started {
+                            text_output_started = true;
+                            let _ = write!(out, "\n");
+                        }
                         write!(out, "{rendered}")
                             .and_then(|()| out.flush())
                             .map_err(|error| RuntimeError::new(error.to_string()))?;
